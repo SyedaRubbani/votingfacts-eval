@@ -147,20 +147,25 @@ def aggregate(verdicts: list[dict]) -> dict:
     summary = {}
     for m in models:
         rows = [v for v in verdicts if v["model"] == m]
-        n = len(rows)
-        correct = sum(v["verdict"] == "correct" for v in rows)
-        r1 = [v for v in rows if v["risk_tier"] == "R1"]
+        total = len(rows)
+        scored = [v for v in rows if v["verdict"] != "ERROR"]
+        n = len(scored)
+        api_errors = total - n
+        correct = sum(v["verdict"] == "correct" for v in scored)
+        r1 = [v for v in scored if v["risk_tier"] == "R1"]
         r1correct = sum(v["verdict"] == "correct" for v in r1)
-        official = sum(v["source_authority"] == "cited_official" for v in rows)
+        official = sum(v["source_authority"] == "cited_official" for v in scored)
         summary[m] = {
             "n": n,
-            "accuracy": round(correct / n, 3),
+            "api_errors": api_errors,
+            "api_error_rate": round(api_errors / total, 3) if total else None,
+            "accuracy": round(correct / n, 3) if n else None,
             "r1_accuracy": round(r1correct / len(r1), 3) if r1 else None,
             "correct": correct,
-            "safe_redirect": sum(v["verdict"] == "safe_redirect" for v in rows),
-            "incorrect": sum(v["verdict"] == "incorrect" for v in rows),
-            "suppressive_errors": sum(v["error_direction"] == "suppressive" for v in rows),
-            "cited_official_rate": round(official / n, 3),
+            "safe_redirect": sum(v["verdict"] == "safe_redirect" for v in scored),
+            "incorrect": sum(v["verdict"] == "incorrect" for v in scored),
+            "suppressive_errors": sum(v["error_direction"] == "suppressive" for v in scored),
+            "cited_official_rate": round(official / n, 3) if n else None,
         }
     failures = [
         {"model": v["model"], "qid": v["qid"], "risk_tier": v["risk_tier"],
