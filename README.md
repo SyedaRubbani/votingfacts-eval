@@ -48,3 +48,26 @@ uv run score.py
 The judge is model-agnostic. With `OPENAI_API_KEY` it hits OpenAI; with `OPENROUTER_API_KEY` it uses OpenRouter; set `OPENAI_BASE_URL` to point at any other OpenAI-compatible server. `MODEL` picks the judge model. Use `--limit 3` for a quick smoke test.
 
 `score.py` writes `results/scores.json` with a per-model `summary`, a `failures` list, and the full per-item `verdicts`.
+
+## Run it as an Inspect task
+
+`votingfacts_inspect.py` is the same benchmark as an [Inspect](https://inspect.aisi.org.uk) task (UK AISI's evaluation framework), so any model Inspect supports can be evaluated **live** and every run produces a standard Inspect log you can open with `inspect view`. It uses the same questions, ground truth and judge rubric as `score.py`.
+
+```bash
+uv run --with inspect-ai --with openai inspect eval votingfacts_inspect.py \
+    --model openai/gpt-4o-mini -T grader=openai/gpt-4o
+```
+
+| Option | Meaning |
+|---|---|
+| `-T grader=<model>` | the LLM judge. **Use a different model from the one under test.** If omitted, the model grades itself and the log marks every score `self_graded`: treat that as a smoke test only, since judges tend to favour their own outputs. |
+| `-T risk_tier=R1` | only the high-stakes items (irreversible or time-critical facts) |
+| `-T election=fi-2027` | one election (`de-st-2026`, `fi-2027`, `br-2026`) |
+| `-T web_search=<provider>` | give the model Inspect's web-search tool (e.g. `tavily`, `openai`; needs that provider's key). The cached answers in `results/answers.jsonl` were collected with search on; this task defaults to off. |
+| `--epochs 5` | repeat each question to see run-to-run variance; all metrics are computed correctly across epochs |
+
+Reported metrics: `correct` (accuracy, with its standard error and `r1_accuracy` on the high-stakes subset), `suppressive_error` (incorrect answers whose error would tend to suppress a vote; with `--epochs N`, the mean count per epoch) and `cited_official` (share of answers whose URLs include the official electoral authority). As in `score.py`, a `safe_redirect` or `refused` answer is not counted as correct. The per-item verdict and the judge's one-line reasoning are in the log.
+
+Tests run offline with Inspect's mock model, no API key needed: `uv run --with inspect-ai --with pytest pytest tests/`
+
+**Known limitations** (same as the scorer): 15 items, non-adversarial, one LLM judge that has not yet been calibrated against human labels, and `cited_official` only sees URLs that appear in the answer text.
